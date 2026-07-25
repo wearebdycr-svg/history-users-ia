@@ -9,7 +9,7 @@ from typing import Optional
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_classic.agents import AgentExecutor, create_react_agent
 from langchain_core.tools import tool
-import langchainhub as hub
+from langchainhub import pull
 
 import streamlit as st
 
@@ -707,7 +707,7 @@ Datos del plan:
     return llm.invoke(prompt).content
 
 
-react_prompt = hub.pull("hwchase17/react")
+react_prompt = pull("hwchase17/react")
 
 stack_advisor_agent = create_react_agent(llm, [recommend_stack], react_prompt)
 stack_advisor_executor = AgentExecutor(agent=stack_advisor_agent, tools=[recommend_stack], verbose=True)
