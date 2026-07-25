@@ -1,6 +1,6 @@
 import streamlit as st
 
-from agent_project_initializer import (
+from agent import (
     DOCUMENTS_DIR,
     stack_advisor_executor,
     plan_summary_executor,
