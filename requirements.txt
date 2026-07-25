@@ -1,8 +1,6 @@
-streamlit
 langchain
-langchain-community
 langchain-core
+langchain-openai
 langchain-google-genai
-langchainhub
-google-genai
+streamlit
 watchdog

@@ -7,19 +7,9 @@ from pathlib import Path
 from typing import Optional
 
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_classic.agents import AgentExecutor, create_react_agent
+from langchain.agents import AgentExecutor, create_react_agent
 from langchain_core.tools import tool
-import langchainhub as hub
-
-import streamlit as st
-
-try:
-    os.environ["GOOGLE_API_KEY"] = st.secrets["GOOGLE_API_KEY"]
-except KeyError:
-    st.warning("GOOGLE_API_KEY no encontrada en st.secrets. Asegúrate de que tu archivo .streamlit/secrets.toml contenga la clave.")
-    if not os.getenv("GOOGLE_API_KEY"):
-        st.error("GOOGLE_API_KEY tampoco encontrada en las variables de entorno. Por favor, configura la clave para continuar.")
-        st.stop()
+from langchain import hub
 
 with open("config.json", "r") as f:
     config = json.load(f)
