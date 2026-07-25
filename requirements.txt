@@ -3,6 +3,6 @@ langchain
 langchain-community
 langchain-core
 langchain-google-genai
+langchainhub
 google-genai
-streamlit
 watchdog
