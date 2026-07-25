@@ -9,7 +9,7 @@ from typing import Optional
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_classic.agents import AgentExecutor, create_react_agent
 from langchain_core.tools import tool
-from langchainhub import pull
+import langchainhub as hub
 
 import streamlit as st
 
