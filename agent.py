@@ -13,8 +13,13 @@ import langchainhub as hub
 
 import streamlit as st
 
-if "GOOGLE_API_KEY" in st.secrets:
+try:
     os.environ["GOOGLE_API_KEY"] = st.secrets["GOOGLE_API_KEY"]
+except KeyError:
+    st.warning("GOOGLE_API_KEY no encontrada en st.secrets. Asegúrate de que tu archivo .streamlit/secrets.toml contenga la clave.")
+    if not os.getenv("GOOGLE_API_KEY"):
+        st.error("GOOGLE_API_KEY tampoco encontrada en las variables de entorno. Por favor, configura la clave para continuar.")
+        st.stop()
 
 with open("config.json", "r") as f:
     config = json.load(f)
