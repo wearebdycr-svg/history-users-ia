@@ -11,6 +11,11 @@ from langchain_classic.agents import AgentExecutor, create_react_agent
 from langchain_core.tools import tool
 import langchainhub as hub
 
+import streamlit as st
+
+if "GOOGLE_API_KEY" in st.secrets:
+    os.environ["GOOGLE_API_KEY"] = st.secrets["GOOGLE_API_KEY"]
+
 with open("config.json", "r") as f:
     config = json.load(f)
 
