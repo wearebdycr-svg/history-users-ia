@@ -7,7 +7,16 @@ from pathlib import Path
 from typing import Optional
 
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain.agents import AgentExecutor, create_react_agent
+from langchain.agents import create_react_agent
+
+try:
+    from langchain.agents import AgentExecutor
+except ImportError:
+    try:
+        from langchain.agents.agent import AgentExecutor
+    except ImportError:
+        from langchain_classic.agents import AgentExecutor
+        
 from langchain_core.tools import tool
 from langchain import hub
 
