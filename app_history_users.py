@@ -26,7 +26,7 @@ if "messages" not in st.session_state:
     st.session_state.messages = [
         {
             "role": "assistant",
-            "content": "¡Hola! Soy tu asistente para la creación de Historias de Usuario. 🚀\n\nCuéntame, **¿cuál es la necesidad o funcionalidad de negocio que deseas desarrollar?** Si tienes un mockup o diseño de la interfaz, ¡puedes subirlo en la barra lateral para que lo analice!"
+            "content": "¡Hola! Soy tu asistente para la creación de Historias de Usuario. 🚀\n\nCuéntame, **¿cuál es la necesidad o funcionalidad de negocio que deseas desarrollar?** (Nota: Sube un diseño o mockup en la barra lateral *solo si dispones de uno*, esto es totalmente opcional. Puedes continuar usando únicamente texto si lo prefieres)."
         }
     ]
 
@@ -119,7 +119,7 @@ with st.sidebar:
         st.session_state.messages = [
             {
                 "role": "assistant",
-                "content": "¡Hola! Soy tu asistente para la creación de Historias de Usuario. 🚀\n\nCuéntame, **¿cuál es la necesidad o funcionalidad de negocio que deseas desarrollar?** Si tienes un mockup o diseño de la interfaz, ¡puedes subirlo en la barra lateral para que lo analice!"
+                "content": "¡Hola! Soy tu asistente para la creación de Historias de Usuario. 🚀\n\nCuéntame, **¿cuál es la necesidad o funcionalidad de negocio que deseas desarrollar?** (Nota: Sube un diseño o mockup en la barra lateral *solo si dispones de uno*, esto es totalmente opcional. Puedes continuar usando únicamente texto si lo prefieres)."
             }
         ]
         st.session_state.chat_step = "need"
@@ -163,7 +163,8 @@ if prompt := st.chat_input("Escribe tu respuesta aquí...", disabled=not api_key
         st.session_state.raw_input = prompt
         
         with st.chat_message("assistant"):
-            with st.spinner("Analizando requerimientos e imagen para preparar preguntas de refinamiento..."):
+            spinner_msg = "Analizando requerimientos e imagen para preparar preguntas de refinamiento..." if uploaded_file else "Analizando requerimientos para preparar preguntas de refinamiento..."
+            with st.spinner(spinner_msg):
                 try:
                     res = refinement_executor.invoke({"input": f"Refine: {prompt}"})
                     response_text = res["output"]
@@ -182,7 +183,8 @@ if prompt := st.chat_input("Escribe tu respuesta aquí...", disabled=not api_key
             
     elif st.session_state.chat_step == "answers":
         with st.chat_message("assistant"):
-            with st.spinner("Generando Historia de Usuario basada en tus respuestas e imagen..."):
+            spinner_msg = "Generando Historia de Usuario basada en tus respuestas e imagen..." if uploaded_file else "Generando Historia de Usuario basada en tus respuestas..."
+            with st.spinner(spinner_msg):
                 try:
                     data = f"Need: {st.session_state.raw_input}. Answers: {prompt}"
                     res = story_writer_executor.invoke({"input": f"Generate story from: {data}"})
@@ -204,7 +206,8 @@ if prompt := st.chat_input("Escribe tu respuesta aquí...", disabled=not api_key
                 break
                 
         with st.chat_message("assistant"):
-            with st.spinner("Actualizando Historia de Usuario según tus comentarios e imagen..."):
+            spinner_msg = "Actualizando Historia de Usuario según tus comentarios e imagen..." if uploaded_file else "Actualizando Historia de Usuario según tus comentarios..."
+            with st.spinner(spinner_msg):
                 try:
                     data = f"Original Story:\n{last_story}\n\nUser request for updates/adjustments:\n{prompt}"
                     res = story_writer_executor.invoke({"input": f"Generate story from: {data}"})
