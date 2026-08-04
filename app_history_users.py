@@ -102,6 +102,27 @@ with st.sidebar:
     
     st.divider()
     
+    st.subheader("📄 Archivo de Apoyo (opcional)")
+    
+    # Selector de archivos de texto o código de apoyo
+    uploaded_doc = st.file_uploader(
+        "Sube un archivo de apoyo (.txt, .md, .html)",
+        type=["txt", "md", "html"],
+        help="Sube un archivo de texto, plantilla de markdown o código HTML que sirva de base o referencia para tu HU."
+    )
+    
+    doc_content = None
+    doc_name = None
+    if uploaded_doc is not None:
+        doc_name = uploaded_doc.name
+        try:
+            doc_content = uploaded_doc.getvalue().decode("utf-8")
+            st.success(f"Archivo de apoyo cargado: `{doc_name}` 📄")
+        except Exception as e:
+            st.error(f"Error al leer el archivo de apoyo: {str(e)}")
+            
+    st.divider()
+    
     # Mostrar el estado actual
     st.info(
         f"**Estado actual:**\n"
@@ -144,14 +165,16 @@ if prompt := st.chat_input("Escribe tu respuesta aquí..."):
     # Guarda el mensaje en el historial
     st.session_state.messages.append({"role": "user", "content": prompt})
     
-    # Instanciación dinámica de los ejecutores con la clave, modelo e imagen seleccionados
+    # Instanciación dinámica de los ejecutores con la clave, modelo, imagen y archivo de apoyo seleccionados
     refinement_executor = DynamicExecutor(
         run_refinement, 
         provider, 
         model_name, 
         api_key, 
         image_bytes=image_bytes, 
-        image_type=image_type
+        image_type=image_type,
+        doc_content=doc_content,
+        doc_name=doc_name
     )
     story_writer_executor = DynamicExecutor(
         run_story_writer, 
@@ -159,7 +182,9 @@ if prompt := st.chat_input("Escribe tu respuesta aquí..."):
         model_name, 
         api_key, 
         image_bytes=image_bytes, 
-        image_type=image_type
+        image_type=image_type,
+        doc_content=doc_content,
+        doc_name=doc_name
     )
     
     # Procesa basado en el paso de conversación (step)
@@ -167,7 +192,14 @@ if prompt := st.chat_input("Escribe tu respuesta aquí..."):
         st.session_state.raw_input = prompt
         
         with st.chat_message("assistant"):
-            spinner_msg = "Analizando requerimientos e imagen para preparar preguntas de refinamiento..." if uploaded_file else "Analizando requerimientos para preparar preguntas de refinamiento..."
+            spinner_msg = "Analizando requerimientos"
+            if uploaded_file and uploaded_doc:
+                spinner_msg += f" (con imagen y archivo {doc_name})"
+            elif uploaded_file:
+                spinner_msg += " (con imagen)"
+            elif uploaded_doc:
+                spinner_msg += f" (con archivo {doc_name})"
+            spinner_msg += " para preparar preguntas de refinamiento..."
             with st.spinner(spinner_msg):
                 try:
                     res = refinement_executor.invoke({"input": f"Refine: {prompt}"})
@@ -187,7 +219,15 @@ if prompt := st.chat_input("Escribe tu respuesta aquí..."):
             
     elif st.session_state.chat_step == "answers":
         with st.chat_message("assistant"):
-            spinner_msg = "Generando Historia de Usuario basada en tus respuestas e imagen..." if uploaded_file else "Generando Historia de Usuario basada en tus respuestas..."
+            spinner_msg = "Generando Historia de Usuario"
+            if uploaded_file and uploaded_doc:
+                spinner_msg += f" (basada en tus respuestas, imagen y archivo {doc_name})..."
+            elif uploaded_file:
+                spinner_msg += " (basada en tus respuestas e imagen)..."
+            elif uploaded_doc:
+                spinner_msg += f" (basada en tus respuestas y archivo {doc_name})..."
+            else:
+                spinner_msg += " (basada en tus respuestas)..."
             with st.spinner(spinner_msg):
                 try:
                     data = f"Need: {st.session_state.raw_input}. Answers: {prompt}"
@@ -210,7 +250,15 @@ if prompt := st.chat_input("Escribe tu respuesta aquí..."):
                 break
                 
         with st.chat_message("assistant"):
-            spinner_msg = "Actualizando Historia de Usuario según tus comentarios e imagen..." if uploaded_file else "Actualizando Historia de Usuario según tus comentarios..."
+            spinner_msg = "Actualizando Historia de Usuario"
+            if uploaded_file and uploaded_doc:
+                spinner_msg += f" (según tus comentarios, imagen y archivo {doc_name})..."
+            elif uploaded_file:
+                spinner_msg += " (según tus comentarios e imagen)..."
+            elif uploaded_doc:
+                spinner_msg += f" (según tus comentarios y archivo {doc_name})..."
+            else:
+                spinner_msg += " (según tus comentarios)..."
             with st.spinner(spinner_msg):
                 try:
                     data = f"Original Story:\n{last_story}\n\nUser request for updates/adjustments:\n{prompt}"

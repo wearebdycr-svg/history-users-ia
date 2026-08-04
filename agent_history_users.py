@@ -6,13 +6,14 @@ SYSTEM_ANALYSER_PROMPT = """Eres un Product Owner y Business Analyst senior con 
 Tu objetivo es analizar la idea o requerimiento de negocio proporcionada y aplicar los principios INVEST (Independiente, Negociable, Valiosa, Estimable, Pequeña, Comprobable).
 
 Sigue estas reglas estrictas:
-1. Analiza el requerimiento del usuario y la imagen adjunta (si se proporciona).
-   *NOTA IMPORTANTE:* La presencia de una imagen o mockup es 100% OPCIONAL. Si el usuario no proporciona ninguna imagen, evalúa el requerimiento basándote única y exclusivamente en el texto proporcionado. No asumas que falta información de diseño por defecto ni solicites subir una imagen, ni exijas o sugieras subir una imagen en tus preguntas de aclaración.
+1. Analiza el requerimiento del usuario, la imagen adjunta (si se proporciona) y el archivo de apoyo (si se proporciona).
+   *NOTA IMPORTANTE:* La presencia de una imagen o un archivo de apoyo es 100% OPCIONAL. Si el usuario no proporciona ninguna imagen ni archivo, evalúa el requerimiento basándote única y exclusivamente en el texto proporcionado. No asumas que falta información por defecto ni solicites o sugieras subir una imagen o archivo en tus preguntas de aclaración.
+   *MANEJO DE ARCHIVO DE APOYO:* Si el usuario proporciona un archivo de apoyo (HTML, Markdown o Texto plano), analízalo detalladamente. Utilízalo como referencia técnica de código, estructura HTML, o plantilla de contenido para diseñar y fundamentar los criterios de aceptación y las notas técnicas de la Historia de Usuario.
    Clasifica la entrada mentalmente en una de dos opciones:
-   - **Claro y Suficiente**: Si el texto (o la combinación de texto + imagen si fue provista) contiene suficiente detalle de flujos, reglas de negocio, diseño o contexto para redactar la HU final inmediatamente sin necesidad de más preguntas.
+   - **Claro y Suficiente**: Si el texto (o la combinación de texto + imagen/archivo si fueron provistos) contiene suficiente detalle de flujos, reglas de negocio, diseño o contexto para redactar la HU final inmediatamente sin necesidad de más preguntas.
    - **Vago o Insuficiente**: Si la entrada de texto es muy corta, ambigua, incompleta o carece de un contexto funcional claro para poder estructurar una HU básica.
 
-2. Si el requerimiento es **Claro y Suficiente** (con o sin imagen):
+2. Si el requerimiento es **Claro y Suficiente** (con o sin imagen/archivo de apoyo):
    Genera directamente la Historia de Usuario completa y refinada con la siguiente estructura exacta en formato Markdown:
    
    # 📝 Título: [Título corto, claro y descriptivo]
@@ -106,6 +107,7 @@ Reglas adicionales:
 - NO agregues preámbulos, saludos ni explicaciones (ej. "Aquí tienes tu Historia de Usuario..."). Empieza directamente con el título en formato markdown.
 - NO agregues secciones de "Preguntas por aclarar" en la versión final de la Historia de Usuario.
 - Si el usuario proporciona comentarios o ajustes sobre una historia previa, aplícalos manteniendo la estructura anterior de forma rigurosa.
+- Si se proporciona un archivo de apoyo (HTML, Markdown o Texto plano), utilízalo como referencia técnica o estructural directa para la Historia de Usuario, documentando supuestos relevantes, código base o reglas derivadas del archivo en la sección de Notas Técnicas/Supuestos o Criterios de Aceptación.
 - Todo el texto debe ser redactado en español.
 """
 
@@ -122,7 +124,7 @@ def get_llm(provider: str, model_name: str, api_key: str):
     else:
         raise ValueError(f"Proveedor '{provider}' no soportado.")
 
-def run_refinement(raw_input: str, provider: str, model_name: str, api_key: str, image_bytes: bytes = None, image_type: str = None) -> str:
+def run_refinement(raw_input: str, provider: str, model_name: str, api_key: str, image_bytes: bytes = None, image_type: str = None, doc_content: str = None, doc_name: str = None) -> str:
     llm = get_llm(provider, model_name, api_key)
     clean_input = raw_input
     if raw_input.startswith("Refine:"):
@@ -133,6 +135,9 @@ def run_refinement(raw_input: str, provider: str, model_name: str, api_key: str,
 Requerimiento o idea de negocio proporcionada:
 {clean_input}
 """
+    if doc_content:
+        prompt_text += f"\n\n--- ARCHIVO DE APOYO ADJUNTO ({doc_name}) ---\n{doc_content}\n--------------------------------------------\n"
+
     if image_bytes and image_type:
         import base64
         image_b64 = base64.b64encode(image_bytes).decode("utf-8")
@@ -148,7 +153,7 @@ Requerimiento o idea de negocio proporcionada:
     else:
         return llm.invoke(prompt_text).content
 
-def run_story_writer(input_data: str, provider: str, model_name: str, api_key: str, image_bytes: bytes = None, image_type: str = None) -> str:
+def run_story_writer(input_data: str, provider: str, model_name: str, api_key: str, image_bytes: bytes = None, image_type: str = None, doc_content: str = None, doc_name: str = None) -> str:
     llm = get_llm(provider, model_name, api_key)
     if input_data.startswith("Generate story from:"):
         input_data = input_data[len("Generate story from:"):].strip()
@@ -158,6 +163,9 @@ def run_story_writer(input_data: str, provider: str, model_name: str, api_key: s
 Información de entrada (necesidad, respuestas o ajustes):
 {input_data}
 """
+    if doc_content:
+        prompt_text += f"\n\n--- ARCHIVO DE APOYO ADJUNTO ({doc_name}) ---\n{doc_content}\n--------------------------------------------\n"
+
     if image_bytes and image_type:
         import base64
         image_b64 = base64.b64encode(image_bytes).decode("utf-8")
@@ -174,13 +182,15 @@ Información de entrada (necesidad, respuestas o ajustes):
         return llm.invoke(prompt_text).content
 
 class DynamicExecutor:
-    def __init__(self, run_func, provider: str, model_name: str, api_key: str, image_bytes: bytes = None, image_type: str = None):
+    def __init__(self, run_func, provider: str, model_name: str, api_key: str, image_bytes: bytes = None, image_type: str = None, doc_content: str = None, doc_name: str = None):
         self.run_func = run_func
         self.provider = provider
         self.model_name = model_name
         self.api_key = api_key
         self.image_bytes = image_bytes
         self.image_type = image_type
+        self.doc_content = doc_content
+        self.doc_name = doc_name
 
     def invoke(self, inputs):
         input_val = inputs.get("input", "")
@@ -190,6 +200,8 @@ class DynamicExecutor:
             self.model_name, 
             self.api_key, 
             self.image_bytes, 
-            self.image_type
+            self.image_type,
+            self.doc_content,
+            self.doc_name
         )
         return {"output": output}
