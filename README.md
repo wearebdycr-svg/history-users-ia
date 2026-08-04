@@ -14,9 +14,18 @@ AI project using LangChain and Streamlit.
 
 ## Setup
 1. Clone repo.
-2. Setup virtual environment `python -m venv env` -> `source venv/bin/activate`
-2. Install deps: `pip install -r requirements.txt`.
-3. Configure `GOOGLE_API_KEY` environment variable.
+2. Setup virtual environment:
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate
+   ```
+3. Install deps:
+   ```bash
+   pip install -r requirements.txt
+   ```
+4. Configure `GOOGLE_API_KEY` environment variable.
 
 ## Run
-`streamlit run app.py`
+```bash
+streamlit run app_history_users.py
+```
