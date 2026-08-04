@@ -62,7 +62,13 @@ with st.sidebar:
         key_url = "https://platform.openai.com/api-keys"
         env_var_name = "OPENAI_API_KEY"
     else:  # Anthropic Claude
-        models = ["claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022"]
+        models = [
+            "claude-3-5-sonnet-latest", 
+            "claude-3-5-sonnet-20241022", 
+            "claude-3-5-sonnet-20240620", 
+            "claude-3-5-haiku-latest", 
+            "claude-3-5-haiku-20241022"
+        ]
         default_index = 0
         key_placeholder = "Escribe tu Anthropic API Key..."
         key_url = "https://console.anthropic.com/"
