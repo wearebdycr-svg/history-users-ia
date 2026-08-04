@@ -11,10 +11,17 @@ from langchain.agents import AgentExecutor, create_react_agent
 from langchain_core.tools import tool
 from langchain import hub
 
-with open("config.json", "r") as f:
-    config = json.load(f)
+try:
+    with open("config.json", "r") as f:
+        config = json.load(f)
+    default_model = config.get("model_name", "gemini-3.1-flash-lite")
+except Exception:
+    default_model = "gemini-3.1-flash-lite"
 
-llm = ChatGoogleGenerativeAI(model=config["model_name"], temperature=0.3)
+try:
+    llm = ChatGoogleGenerativeAI(model=default_model, temperature=0.3)
+except Exception:
+    llm = None
 
 # Carpeta base donde se permite inicializar proyectos (Supuesto de la HU: acceso a ~/Documents)
 DOCUMENTS_DIR = Path.home() / "Documents"
@@ -702,10 +709,158 @@ Datos del plan:
     return llm.invoke(prompt).content
 
 
-react_prompt = hub.pull("hwchase17/react")
+try:
+    react_prompt = hub.pull("hwchase17/react")
+except Exception:
+    from langchain_core.prompts import PromptTemplate
+    react_prompt = PromptTemplate.from_template(
+        "Answer the following questions as best you can. You have access to the following tools:\n\n"
+        "{tools}\n\n"
+        "Use the following format:\n\n"
+        "Question: the input question you must answer\n"
+        "Thought: you should always think about what to do\n"
+        "Action: the action to take, should be one of [{tool_names}]\n"
+        "Action Input: the input to the action\n"
+        "Observation: the result of the action\n"
+        "... (this Thought/Action/Action Input/Observation can repeat N times)\n"
+        "Thought: I now know the final answer\n"
+        "Final Answer: the final answer to the original input question\n\n"
+        "Begin!\n\n"
+        "Question: {input}\n"
+        "Thought:{agent_scratchpad}"
+    )
 
-stack_advisor_agent = create_react_agent(llm, [recommend_stack], react_prompt)
-stack_advisor_executor = AgentExecutor(agent=stack_advisor_agent, tools=[recommend_stack], verbose=True)
+try:
+    if llm is not None:
+        stack_advisor_agent = create_react_agent(llm, [recommend_stack], react_prompt)
+        stack_advisor_executor = AgentExecutor(agent=stack_advisor_agent, tools=[recommend_stack], verbose=True)
 
-plan_summary_agent = create_react_agent(llm, [summarize_installation_plan], react_prompt)
-plan_summary_executor = AgentExecutor(agent=plan_summary_agent, tools=[summarize_installation_plan], verbose=True)
+        plan_summary_agent = create_react_agent(llm, [summarize_installation_plan], react_prompt)
+        plan_summary_executor = AgentExecutor(agent=plan_summary_agent, tools=[summarize_installation_plan], verbose=True)
+    else:
+        stack_advisor_executor = None
+        plan_summary_executor = None
+except Exception:
+    stack_advisor_executor = None
+    plan_summary_executor = None
+
+
+def create_executors(provider: str, api_key: str, model_name: str) -> tuple:
+    """Crea de manera dinámica las herramientas y los ejecutores del agente (stack advisor y plan summary)
+    según el proveedor, la API key y el modelo seleccionados en el front.
+    """
+    key_to_use = api_key.strip()
+
+    if provider.lower() == "google gemini":
+        from langchain_google_genai import ChatGoogleGenerativeAI
+        actual_key = key_to_use or os.environ.get("GOOGLE_API_KEY")
+        if not actual_key:
+            raise ValueError(
+                "No se encontró una API Key para Google Gemini. "
+                "Por favor, ingrésala en el panel de configuración de la barra lateral."
+            )
+        llm_instance = ChatGoogleGenerativeAI(
+            model=model_name, 
+            google_api_key=actual_key, 
+            temperature=0.3
+        )
+    elif provider.lower() == "openai":
+        from langchain_openai import ChatOpenAI
+        actual_key = key_to_use or os.environ.get("OPENAI_API_KEY")
+        if not actual_key:
+            raise ValueError(
+                "No se encontró una API Key para OpenAI. "
+                "Por favor, ingrésala en el panel de configuración de la barra lateral."
+            )
+        llm_instance = ChatOpenAI(
+            model=model_name, 
+            api_key=actual_key, 
+            temperature=0.3
+        )
+    elif provider.lower() == "anthropic claude":
+        try:
+            from langchain_community.chat_models import ChatAnthropic
+        except ImportError:
+            try:
+                from langchain_anthropic import ChatAnthropic
+            except ImportError:
+                raise ImportError(
+                    "La librería `langchain-anthropic` o `langchain-community` no tiene disponible ChatAnthropic. "
+                    "Para usar Anthropic Claude, por favor ejecuta en tu terminal:\n"
+                    "`pip install langchain-anthropic`"
+                )
+        actual_key = key_to_use or os.environ.get("ANTHROPIC_API_KEY")
+        if not actual_key:
+            raise ValueError(
+                "No se encontró una API Key para Anthropic Claude. "
+                "Por favor, ingrésala en el panel de configuración de la barra lateral."
+            )
+        llm_instance = ChatAnthropic(
+            model=model_name, 
+            anthropic_api_key=actual_key, 
+            temperature=0.3
+        )
+    else:
+        raise ValueError(f"Proveedor '{provider}' no soportado de manera directa.")
+
+    # Definir las herramientas utilizando la instancia local de llm_instance (closure)
+    @tool(return_direct=True)
+    def recommend_stack_local(project_type: str) -> str:
+        """Recomienda, mediante el árbol de decisión, los stacks tecnológicos disponibles para un tipo de proyecto ('web' o 'mobile')."""
+        stacks = get_recommended_stacks(project_type.strip().lower())
+        if not stacks:
+            return "⚠️ Tipo de proyecto no reconocido. Por favor indica 'Web' o 'Mobile'."
+
+        options_text = "\n".join(
+            f"{i}. {s['name']} (gestor: {s['manager']})" for i, s in enumerate(stacks, start=1)
+        )
+        prompt = f"""{SYSTEM_STACK_ADVISOR_PROMPT}
+
+Tipo de proyecto: {project_type}
+Opciones disponibles:
+{options_text}
+"""
+        return llm_instance.invoke(prompt).content
+
+    @tool(return_direct=True)
+    def summarize_installation_plan_local(plan_data: str) -> str:
+        """Genera el resumen del plan de instalación para presentarlo al usuario en el checkpoint de Human-in-the-loop."""
+        prompt = f"""{SYSTEM_PLAN_SUMMARY_PROMPT}
+
+Datos del plan:
+{plan_data}
+"""
+        return llm_instance.invoke(prompt).content
+
+    # Obtener el prompt de ReAct de manera robusta
+    try:
+        from langchain import hub
+        react_prompt_local = hub.pull("hwchase17/react")
+    except Exception:
+        from langchain_core.prompts import PromptTemplate
+        react_prompt_local = PromptTemplate.from_template(
+            "Answer the following questions as best you can. You have access to the following tools:\n\n"
+            "{tools}\n\n"
+            "Use the following format:\n\n"
+            "Question: the input question you must answer\n"
+            "Thought: you should always think about what to do\n"
+            "Action: the action to take, should be one of [{tool_names}]\n"
+            "Action Input: the input to the action\n"
+            "Observation: the result of the action\n"
+            "... (this Thought/Action/Action Input/Observation can repeat N times)\n"
+            "Thought: I now know the final answer\n"
+            "Final Answer: the final answer to the original input question\n\n"
+            "Begin!\n\n"
+            "Question: {input}\n"
+            "Thought:{agent_scratchpad}"
+        )
+
+    # Crear los ejecutores con la instancia local de llm e hilos correspondientes
+    advisor_agent = create_react_agent(llm_instance, [recommend_stack_local], react_prompt_local)
+    advisor_executor = AgentExecutor(agent=advisor_agent, tools=[recommend_stack_local], verbose=True)
+
+    summary_agent = create_react_agent(llm_instance, [summarize_installation_plan_local], react_prompt_local)
+    summary_executor = AgentExecutor(agent=summary_agent, tools=[summarize_installation_plan_local], verbose=True)
+
+    return advisor_executor, summary_executor
+
