@@ -113,13 +113,22 @@ Reglas adicionales:
 
 def get_llm(provider: str, model_name: str, api_key: str):
     if provider == "Google Gemini":
-        from langchain_google_genai import ChatGoogleGenerativeAI
+        try:
+            from langchain_google_genai import ChatGoogleGenerativeAI
+        except ImportError:
+            raise ImportError("Falta instalar el paquete para Google Gemini. Por favor ejecuta en tu terminal: `pip install langchain-google-genai`")
         return ChatGoogleGenerativeAI(model=model_name, google_api_key=api_key, temperature=0.7)
     elif provider == "OpenAI":
-        from langchain_openai import ChatOpenAI
+        try:
+            from langchain_openai import ChatOpenAI
+        except ImportError:
+            raise ImportError("Falta instalar el paquete para OpenAI. Por favor ejecuta en tu terminal: `pip install langchain-openai`")
         return ChatOpenAI(model=model_name, api_key=api_key, temperature=0.7)
     elif provider == "Anthropic Claude":
-        from langchain_anthropic import ChatAnthropic
+        try:
+            from langchain_anthropic import ChatAnthropic
+        except ImportError:
+            raise ImportError("Falta instalar el paquete para Anthropic Claude. Por favor ejecuta en tu terminal: `pip install langchain-anthropic`")
         return ChatAnthropic(model=model_name, api_key=api_key, temperature=0.7)
     else:
         raise ValueError(f"Proveedor '{provider}' no soportado.")
