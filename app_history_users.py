@@ -17,7 +17,7 @@ st.markdown(
     **¡Bienvenido al refinador inteligente de historias de usuario!**  
     Aquí podrás definir tu necesidad, responder preguntas clave de refinamiento y obtener tu Historia de Usuario final de forma totalmente conversacional en un solo chat.
     
-    Este agente utiliza los principios **INVEST** y desglosa los criterios de aceptación en formato **BDD** (*Dado que / Cuando / Entonces*).
+    Este agente utiliza los principios **INVEST**, desglosa los criterios de aceptación en formato **BDD** (*Dado que / Cuando / Entonces*) y **admite el análisis de mockups o imágenes de diseños** para complementar tus requerimientos de forma multimodal.
     """
 )
 
@@ -26,7 +26,7 @@ if "messages" not in st.session_state:
     st.session_state.messages = [
         {
             "role": "assistant",
-            "content": "¡Hola! Soy tu asistente para la creación de Historias de Usuario. 🚀\n\nCuéntame, **¿cuál es la necesidad o funcionalidad de negocio que deseas desarrollar?**"
+            "content": "¡Hola! Soy tu asistente para la creación de Historias de Usuario. 🚀\n\nCuéntame, **¿cuál es la necesidad o funcionalidad de negocio que deseas desarrollar?** Si tienes un mockup o diseño de la interfaz, ¡puedes subirlo en la barra lateral para que lo analice!"
         }
     ]
 
@@ -83,6 +83,25 @@ with st.sidebar:
     
     st.divider()
     
+    st.subheader("📐 Entrada de Diseño / Imagen")
+    
+    # Selector de archivos de imagen (Mockup o captura)
+    uploaded_file = st.file_uploader(
+        "Sube una captura o mockup (opcional)",
+        type=["png", "jpg", "jpeg"],
+        help="Sube una captura de pantalla, bosquejo o diseño de la funcionalidad para que la IA la analice al generar la HU."
+    )
+    
+    image_bytes = None
+    image_type = None
+    if uploaded_file is not None:
+        image_bytes = uploaded_file.getvalue()
+        image_type = uploaded_file.type
+        # Mostrar preview del diseño subido en el sidebar
+        st.image(uploaded_file, caption="Diseño adjunto listo para analizar 🖼️", use_container_width=True)
+    
+    st.divider()
+    
     # Mostrar el estado actual
     st.info(
         f"**Estado actual:**\n"
@@ -100,7 +119,7 @@ with st.sidebar:
         st.session_state.messages = [
             {
                 "role": "assistant",
-                "content": "¡Hola! Soy tu asistente para la creación de Historias de Usuario. 🚀\n\nCuéntame, **¿cuál es la necesidad o funcionalidad de negocio que deseas desarrollar?**"
+                "content": "¡Hola! Soy tu asistente para la creación de Historias de Usuario. 🚀\n\nCuéntame, **¿cuál es la necesidad o funcionalidad de negocio que deseas desarrollar?** Si tienes un mockup o diseño de la interfaz, ¡puedes subirlo en la barra lateral para que lo analice!"
             }
         ]
         st.session_state.chat_step = "need"
@@ -121,16 +140,30 @@ if prompt := st.chat_input("Escribe tu respuesta aquí...", disabled=not api_key
     # Guarda el mensaje en el historial
     st.session_state.messages.append({"role": "user", "content": prompt})
     
-    # Instanciación dinámica de los ejecutores con la clave y modelo seleccionados
-    refinement_executor = DynamicExecutor(run_refinement, provider, model_name, api_key)
-    story_writer_executor = DynamicExecutor(run_story_writer, provider, model_name, api_key)
+    # Instanciación dinámica de los ejecutores con la clave, modelo e imagen seleccionados
+    refinement_executor = DynamicExecutor(
+        run_refinement, 
+        provider, 
+        model_name, 
+        api_key, 
+        image_bytes=image_bytes, 
+        image_type=image_type
+    )
+    story_writer_executor = DynamicExecutor(
+        run_story_writer, 
+        provider, 
+        model_name, 
+        api_key, 
+        image_bytes=image_bytes, 
+        image_type=image_type
+    )
     
     # Procesa basado en el paso de conversación (step)
     if st.session_state.chat_step == "need":
         st.session_state.raw_input = prompt
         
         with st.chat_message("assistant"):
-            with st.spinner("Analizando necesidad y preparando preguntas de refinamiento..."):
+            with st.spinner("Analizando requerimientos e imagen para preparar preguntas de refinamiento..."):
                 try:
                     res = refinement_executor.invoke({"input": f"Refine: {prompt}"})
                     response_text = res["output"]
@@ -149,7 +182,7 @@ if prompt := st.chat_input("Escribe tu respuesta aquí...", disabled=not api_key
             
     elif st.session_state.chat_step == "answers":
         with st.chat_message("assistant"):
-            with st.spinner("Generando Historia de Usuario basada en tus respuestas..."):
+            with st.spinner("Generando Historia de Usuario basada en tus respuestas e imagen..."):
                 try:
                     data = f"Need: {st.session_state.raw_input}. Answers: {prompt}"
                     res = story_writer_executor.invoke({"input": f"Generate story from: {data}"})
@@ -171,7 +204,7 @@ if prompt := st.chat_input("Escribe tu respuesta aquí...", disabled=not api_key
                 break
                 
         with st.chat_message("assistant"):
-            with st.spinner("Actualizando Historia de Usuario según tus comentarios..."):
+            with st.spinner("Actualizando Historia de Usuario según tus comentarios e imagen..."):
                 try:
                     data = f"Original Story:\n{last_story}\n\nUser request for updates/adjustments:\n{prompt}"
                     res = story_writer_executor.invoke({"input": f"Generate story from: {data}"})
