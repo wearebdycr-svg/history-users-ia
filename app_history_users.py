@@ -131,8 +131,12 @@ for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# Capturar y actuar ante la acción del usuario (Deshabilitado si falta la clave de API)
-if prompt := st.chat_input("Escribe tu respuesta aquí...", disabled=not api_key):
+# Capturar y actuar ante la acción del usuario
+if prompt := st.chat_input("Escribe tu respuesta aquí..."):
+    if not api_key:
+        st.error("⚠️ Para poder interactuar con el asistente, primero debes ingresar tu API Key en la barra lateral izquierda.")
+        st.stop()
+        
     # Muestra el mensaje del usuario en el chat
     with st.chat_message("user"):
         st.markdown(prompt)
