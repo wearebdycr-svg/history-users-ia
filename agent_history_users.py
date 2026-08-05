@@ -9,9 +9,9 @@ Sigue estas reglas estrictas:
 1. Analiza el requerimiento del usuario, la imagen adjunta (si se proporciona) y el archivo de apoyo (si se proporciona).
    *NOTA IMPORTANTE:* La presencia de una imagen o un archivo de apoyo es 100% OPCIONAL. Si el usuario no proporciona ninguna imagen ni archivo, evalúa el requerimiento basándote única y exclusivamente en el texto proporcionado. No asumas que falta información por defecto ni solicites o sugieras subir una imagen o archivo en tus preguntas de aclaración.
    *MANEJO DE ARCHIVO DE APOYO:* Si el usuario proporciona un archivo de apoyo (HTML, Markdown o Texto plano), analízalo detalladamente. Utilízalo como referencia técnica de código, estructura HTML, o plantilla de contenido para diseñar y fundamentar los criterios de aceptación y las notas técnicas de la Historia de Usuario.
-   Clasifica la entrada mentalmente en una de dos opciones:
-   - **Claro y Suficiente**: Si el texto (o la combinación de texto + imagen/archivo si fueron provistos) contiene suficiente detalle de flujos, reglas de negocio, diseño o contexto para redactar la HU final inmediatamente sin necesidad de más preguntas.
-   - **Vago o Insuficiente**: Si la entrada de texto es muy corta, ambigua, incompleta o carece de un contexto funcional claro para poder estructurar una HU básica.
+   Clasifica la entrada en una de dos opciones:
+   - **Claro y Suficiente**: SÓLO si la entrada contiene detalles extremadamente completos y explícitos de flujos, roles, reglas de negocio detalladas y criterios de aceptación específicos para poder escribir la historia definitiva sin asumir absolutamente nada.
+   - **Vago o Insuficiente**: Si la entrada de texto es corta, general, o carece de detalles exhaustivos sobre las reglas de negocio o flujos (ej: descripciones breves como "quiero un login", "añadir buscador", o ideas generales de negocio). En caso de duda, o si no se especifican al menos tres detalles de comportamiento clave, considérala obligatoriamente como **Vago o Insuficiente** para poder hacer preguntas de refinamiento.
 
 2. Si el requerimiento es **Claro y Suficiente** (con o sin imagen/archivo de apoyo):
    Genera directamente la Historia de Usuario completa y refinada con la siguiente estructura exacta en formato Markdown:
@@ -133,7 +133,7 @@ def get_llm(provider: str, model_name: str, api_key: str):
     else:
         raise ValueError(f"Proveedor '{provider}' no soportado.")
 
-def run_refinement(raw_input: str, provider: str, model_name: str, api_key: str, image_bytes: bytes = None, image_type: str = None, doc_content: str = None, doc_name: str = None) -> str:
+def run_refinement(raw_input: str, provider: str, model_name: str, api_key: str, images_list: list = None, docs_list: list = None) -> str:
     llm = get_llm(provider, model_name, api_key)
     clean_input = raw_input
     if raw_input.startswith("Refine:"):
@@ -144,25 +144,31 @@ def run_refinement(raw_input: str, provider: str, model_name: str, api_key: str,
 Requerimiento o idea de negocio proporcionada:
 {clean_input}
 """
-    if doc_content:
-        prompt_text += f"\n\n--- ARCHIVO DE APOYO ADJUNTO ({doc_name}) ---\n{doc_content}\n--------------------------------------------\n"
+    if docs_list:
+        for doc in docs_list:
+            d_name = doc.get("name", "Documento")
+            d_content = doc.get("content", "")
+            if d_content:
+                prompt_text += f"\n\n--- ARCHIVO DE APOYO ADJUNTO ({d_name}) ---\n{d_content}\n--------------------------------------------\n"
 
-    if image_bytes and image_type:
+    if images_list:
         import base64
-        image_b64 = base64.b64encode(image_bytes).decode("utf-8")
-        content_parts = [
-            {"type": "text", "text": prompt_text},
-            {
-                "type": "image_url",
-                "image_url": {"url": f"data:{image_type};base64,{image_b64}"}
-            }
-        ]
+        content_parts = [{"type": "text", "text": prompt_text}]
+        for img in images_list:
+            img_bytes = img.get("bytes")
+            img_type = img.get("type")
+            if img_bytes and img_type:
+                image_b64 = base64.b64encode(img_bytes).decode("utf-8")
+                content_parts.append({
+                    "type": "image_url",
+                    "image_url": {"url": f"data:{img_type};base64,{image_b64}"}
+                })
         message = HumanMessage(content=content_parts)
         return llm.invoke([message]).content
     else:
         return llm.invoke(prompt_text).content
 
-def run_story_writer(input_data: str, provider: str, model_name: str, api_key: str, image_bytes: bytes = None, image_type: str = None, doc_content: str = None, doc_name: str = None) -> str:
+def run_story_writer(input_data: str, provider: str, model_name: str, api_key: str, images_list: list = None, docs_list: list = None) -> str:
     llm = get_llm(provider, model_name, api_key)
     if input_data.startswith("Generate story from:"):
         input_data = input_data[len("Generate story from:"):].strip()
@@ -172,34 +178,38 @@ def run_story_writer(input_data: str, provider: str, model_name: str, api_key: s
 Información de entrada (necesidad, respuestas o ajustes):
 {input_data}
 """
-    if doc_content:
-        prompt_text += f"\n\n--- ARCHIVO DE APOYO ADJUNTO ({doc_name}) ---\n{doc_content}\n--------------------------------------------\n"
+    if docs_list:
+        for doc in docs_list:
+            d_name = doc.get("name", "Documento")
+            d_content = doc.get("content", "")
+            if d_content:
+                prompt_text += f"\n\n--- ARCHIVO DE APOYO ADJUNTO ({d_name}) ---\n{d_content}\n--------------------------------------------\n"
 
-    if image_bytes and image_type:
+    if images_list:
         import base64
-        image_b64 = base64.b64encode(image_bytes).decode("utf-8")
-        content_parts = [
-            {"type": "text", "text": prompt_text},
-            {
-                "type": "image_url",
-                "image_url": {"url": f"data:{image_type};base64,{image_b64}"}
-            }
-        ]
+        content_parts = [{"type": "text", "text": prompt_text}]
+        for img in images_list:
+            img_bytes = img.get("bytes")
+            img_type = img.get("type")
+            if img_bytes and img_type:
+                image_b64 = base64.b64encode(img_bytes).decode("utf-8")
+                content_parts.append({
+                    "type": "image_url",
+                    "image_url": {"url": f"data:{img_type};base64,{image_b64}"}
+                })
         message = HumanMessage(content=content_parts)
         return llm.invoke([message]).content
     else:
         return llm.invoke(prompt_text).content
 
 class DynamicExecutor:
-    def __init__(self, run_func, provider: str, model_name: str, api_key: str, image_bytes: bytes = None, image_type: str = None, doc_content: str = None, doc_name: str = None):
+    def __init__(self, run_func, provider: str, model_name: str, api_key: str, images_list: list = None, docs_list: list = None):
         self.run_func = run_func
         self.provider = provider
         self.model_name = model_name
         self.api_key = api_key
-        self.image_bytes = image_bytes
-        self.image_type = image_type
-        self.doc_content = doc_content
-        self.doc_name = doc_name
+        self.images_list = images_list
+        self.docs_list = docs_list
 
     def invoke(self, inputs):
         input_val = inputs.get("input", "")
@@ -208,9 +218,7 @@ class DynamicExecutor:
             self.provider, 
             self.model_name, 
             self.api_key, 
-            self.image_bytes, 
-            self.image_type,
-            self.doc_content,
-            self.doc_name
+            images_list=self.images_list, 
+            docs_list=self.docs_list
         )
         return {"output": output}

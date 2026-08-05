@@ -92,40 +92,49 @@ with st.sidebar:
     st.subheader("📐 Entrada de Diseño / Imagen")
     
     # Selector de archivos de imagen (Mockup o captura)
-    uploaded_file = st.file_uploader(
-        "Sube una captura o mockup (opcional)",
+    uploaded_files = st.file_uploader(
+        "Sube una o varias capturas o mockups (opcional)",
         type=["png", "jpg", "jpeg"],
-        help="Sube una captura de pantalla, bosquejo o diseño de la funcionalidad para que la IA la analice al generar la HU."
+        accept_multiple_files=True,
+        help="Sube una o más capturas de pantalla, bosquejos o diseños de la funcionalidad para que la IA la analice al generar la HU."
     )
     
-    image_bytes = None
-    image_type = None
-    if uploaded_file is not None:
-        image_bytes = uploaded_file.getvalue()
-        image_type = uploaded_file.type
-        # Mostrar preview del diseño subido en el sidebar
-        st.image(uploaded_file, caption="Diseño adjunto listo para analizar 🖼️", use_container_width=True)
+    images_list = []
+    if uploaded_files:
+        for uploaded_file in uploaded_files:
+            images_list.append({
+                "bytes": uploaded_file.getvalue(),
+                "type": uploaded_file.type,
+                "name": uploaded_file.name
+            })
+            # Mostrar preview de cada diseño subido en el sidebar
+            st.image(uploaded_file, caption=f"Diseño: {uploaded_file.name} 🖼️", use_container_width=True)
     
     st.divider()
     
-    st.subheader("📄 Archivo de Apoyo (opcional)")
+    st.subheader("📄 Archivos de Apoyo (opcional)")
     
     # Selector de archivos de texto o código de apoyo
-    uploaded_doc = st.file_uploader(
-        "Sube un archivo de apoyo (.txt, .md, .html)",
+    uploaded_docs = st.file_uploader(
+        "Sube uno o varios archivos de apoyo (.txt, .md, .html) (opcional)",
         type=["txt", "md", "html"],
-        help="Sube un archivo de texto, plantilla de markdown o código HTML que sirva de base o referencia para tu HU."
+        accept_multiple_files=True,
+        help="Sube uno o más archivos de texto, plantillas de markdown o código HTML que sirvan de base o referencia para tu HU."
     )
     
-    doc_content = None
-    doc_name = None
-    if uploaded_doc is not None:
-        doc_name = uploaded_doc.name
-        try:
-            doc_content = uploaded_doc.getvalue().decode("utf-8")
-            st.success(f"Archivo de apoyo cargado: `{doc_name}` 📄")
-        except Exception as e:
-            st.error(f"Error al leer el archivo de apoyo: {str(e)}")
+    docs_list = []
+    if uploaded_docs:
+        for uploaded_doc in uploaded_docs:
+            doc_name = uploaded_doc.name
+            try:
+                doc_content = uploaded_doc.getvalue().decode("utf-8")
+                docs_list.append({
+                    "name": doc_name,
+                    "content": doc_content
+                })
+                st.success(f"Archivo de apoyo cargado: `{doc_name}` 📄")
+            except Exception as e:
+                st.error(f"Error al leer el archivo de apoyo `{doc_name}`: {str(e)}")
             
     st.divider()
     
@@ -171,26 +180,22 @@ if prompt := st.chat_input("Escribe tu respuesta aquí..."):
     # Guarda el mensaje en el historial
     st.session_state.messages.append({"role": "user", "content": prompt})
     
-    # Instanciación dinámica de los ejecutores con la clave, modelo, imagen y archivo de apoyo seleccionados
+    # Instanciación dinámica de los ejecutores con la clave, modelo, imágenes y archivos de apoyo seleccionados
     refinement_executor = DynamicExecutor(
         run_refinement, 
         provider, 
         model_name, 
         api_key, 
-        image_bytes=image_bytes, 
-        image_type=image_type,
-        doc_content=doc_content,
-        doc_name=doc_name
+        images_list=images_list, 
+        docs_list=docs_list
     )
     story_writer_executor = DynamicExecutor(
         run_story_writer, 
         provider, 
         model_name, 
         api_key, 
-        image_bytes=image_bytes, 
-        image_type=image_type,
-        doc_content=doc_content,
-        doc_name=doc_name
+        images_list=images_list, 
+        docs_list=docs_list
     )
     
     # Procesa basado en el paso de conversación (step)
@@ -199,12 +204,17 @@ if prompt := st.chat_input("Escribe tu respuesta aquí..."):
         
         with st.chat_message("assistant"):
             spinner_msg = "Analizando requerimientos"
-            if uploaded_file and uploaded_doc:
-                spinner_msg += f" (con imagen y archivo {doc_name})"
-            elif uploaded_file:
-                spinner_msg += " (con imagen)"
-            elif uploaded_doc:
-                spinner_msg += f" (con archivo {doc_name})"
+            has_images = len(uploaded_files) > 0 if uploaded_files else False
+            has_docs = len(uploaded_docs) > 0 if uploaded_docs else False
+            
+            if has_images and has_docs:
+                doc_names = ", ".join([doc.name for doc in uploaded_docs])
+                spinner_msg += f" (con {len(uploaded_files)} imágen(es) y archivo(s) {doc_names})"
+            elif has_images:
+                spinner_msg += f" (con {len(uploaded_files)} imágen(es))"
+            elif has_docs:
+                doc_names = ", ".join([doc.name for doc in uploaded_docs])
+                spinner_msg += f" (con archivo(s) {doc_names})"
             spinner_msg += " para preparar preguntas de refinamiento..."
             with st.spinner(spinner_msg):
                 try:
@@ -217,7 +227,8 @@ if prompt := st.chat_input("Escribe tu respuesta aquí..."):
             st.session_state.messages.append({"role": "assistant", "content": response_text})
             
             # Decisión inteligente de transición de paso
-            if "preguntas por aclarar" in response_text.lower():
+            response_lower = response_text.lower()
+            if "preguntas por aclarar" in response_lower or "preguntas" in response_lower or "por aclarar" in response_lower or "❓" in response_lower:
                 st.session_state.chat_step = "answers"
             else:
                 st.session_state.chat_step = "done"
@@ -226,12 +237,17 @@ if prompt := st.chat_input("Escribe tu respuesta aquí..."):
     elif st.session_state.chat_step == "answers":
         with st.chat_message("assistant"):
             spinner_msg = "Generando Historia de Usuario"
-            if uploaded_file and uploaded_doc:
-                spinner_msg += f" (basada en tus respuestas, imagen y archivo {doc_name})..."
-            elif uploaded_file:
-                spinner_msg += " (basada en tus respuestas e imagen)..."
-            elif uploaded_doc:
-                spinner_msg += f" (basada en tus respuestas y archivo {doc_name})..."
+            has_images = len(uploaded_files) > 0 if uploaded_files else False
+            has_docs = len(uploaded_docs) > 0 if uploaded_docs else False
+            
+            if has_images and has_docs:
+                doc_names = ", ".join([doc.name for doc in uploaded_docs])
+                spinner_msg += f" (basada en tus respuestas, {len(uploaded_files)} imágen(es) y archivo(s) {doc_names})..."
+            elif has_images:
+                spinner_msg += f" (basada en tus respuestas y {len(uploaded_files)} imágen(es))..."
+            elif has_docs:
+                doc_names = ", ".join([doc.name for doc in uploaded_docs])
+                spinner_msg += f" (basada en tus respuestas y archivo(s) {doc_names})..."
             else:
                 spinner_msg += " (basada en tus respuestas)..."
             with st.spinner(spinner_msg):
@@ -257,12 +273,17 @@ if prompt := st.chat_input("Escribe tu respuesta aquí..."):
                 
         with st.chat_message("assistant"):
             spinner_msg = "Actualizando Historia de Usuario"
-            if uploaded_file and uploaded_doc:
-                spinner_msg += f" (según tus comentarios, imagen y archivo {doc_name})..."
-            elif uploaded_file:
-                spinner_msg += " (según tus comentarios e imagen)..."
-            elif uploaded_doc:
-                spinner_msg += f" (según tus comentarios y archivo {doc_name})..."
+            has_images = len(uploaded_files) > 0 if uploaded_files else False
+            has_docs = len(uploaded_docs) > 0 if uploaded_docs else False
+            
+            if has_images and has_docs:
+                doc_names = ", ".join([doc.name for doc in uploaded_docs])
+                spinner_msg += f" (según tus comentarios, {len(uploaded_files)} imágen(es) y archivo(s) {doc_names})..."
+            elif has_images:
+                spinner_msg += f" (según tus comentarios y {len(uploaded_files)} imágen(es))..."
+            elif has_docs:
+                doc_names = ", ".join([doc.name for doc in uploaded_docs])
+                spinner_msg += f" (según tus comentarios y archivo(s) {doc_names})..."
             else:
                 spinner_msg += " (según tus comentarios)..."
             with st.spinner(spinner_msg):
